@@ -13,7 +13,7 @@ data/processed/*.csv
 
 
 # ML Models
-models/*.pkl 
+# models/*.pkl
 
 # OS
 .DS_Store
