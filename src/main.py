@@ -1,5 +1,7 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware  # ADD THIS LINE
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse  # ADD THIS
+from fastapi.staticfiles import StaticFiles  # ADD THIS
 import sys
 from pathlib import Path
 
@@ -14,14 +16,22 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# ADD THIS ENTIRE BLOCK
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files - ADD THIS
+app.mount("/static", StaticFiles(directory="src"), name="static")
+
+# Serve demo page - ADD THIS
+@app.get("/demo")
+async def get_demo():
+    return FileResponse("src/demo.html")
 
 # Include routers
 app.include_router(router, prefix="/api/v1/loans", tags=["Loans"])
