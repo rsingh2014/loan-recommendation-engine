@@ -63,22 +63,36 @@ class BasePredictor(ABC):
         return result
     
     def _encode_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Encode categorical features using stored encoders"""
-        encoded = df.copy()
-        
-        for col, encoder in self.encoders.items():
-            if col in encoded.columns:
-                try:
-                    value = encoded[col].iloc[0]
-                    if value not in encoder.classes_:
+      """Encode categorical features using stored encoders"""
+      encoded = df.copy()
+    
+      for col, encoder in self.encoders.items():
+        if col in encoded.columns:
+            try:
+                value = encoded[col].iloc[0]
+                
+                # Special handling for zip_code - use mode (most common value)
+                if col == 'zip_code' and value not in encoder.classes_:
+                    # Use the most common zip code from training data
+                    encoded[col] = encoder.transform([encoder.classes_[0]])[0]
+                    print(f"Warning: Unknown zip_code '{value}', using default")
+                # For other categorical features, try 'Unknown' fallback
+                elif value not in encoder.classes_:
+                    if 'Unknown' in encoder.classes_:
                         encoded[col] = encoder.transform(['Unknown'])[0]
                     else:
-                        encoded[col] = encoder.transform(encoded[col])
-                except Exception as e:
-                    print(f"Warning: Encoding error for {col}, using default")
-                    encoded[col] = 0
-        
-        return encoded
+                        # Use the first class as default
+                        encoded[col] = encoder.transform([encoder.classes_[0]])[0]
+                        print(f"Warning: Unknown value for {col}, using default")
+                else:
+                    # Normal encoding
+                    encoded[col] = encoder.transform(encoded[col])
+                    
+            except Exception as e:
+                print(f"Error encoding {col}: {e}, using fallback")
+                encoded[col] = 0
+    
+      return encoded
     
     def batch_predict(self, input_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process multiple predictions"""
