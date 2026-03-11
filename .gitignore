@@ -23,3 +23,6 @@ data/processed/*.csv
 # Replit
 .replit
 .pythonlibs/
+models_backup_*/
+venv*/
+*_corrected.py
