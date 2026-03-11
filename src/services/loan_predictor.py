@@ -1,47 +1,53 @@
-from .base_predictor import BasePredictor
+"""
+Loan Predictor - CORRECTED for One-Hot Encoding
+Removed derived features (loan_category, dti_risk)
+"""
+
+#from .base_predictor import BasePredictor
+from .base_predictor_corrected import BasePredictor
 import pandas as pd
 import joblib
-from pathlib import Path 
+from pathlib import Path
 from typing import Dict, Any
+
 
 class LoanPredictor(BasePredictor):
     
-    def __init__(self, model_path="models"):
-        self.model_path = Path(model_path)
-        
-        # Load all required artifacts
-        try:
-            self.model = joblib.load(self.model_path / "loan_model.pkl")
-            self.encoder = joblib.load(self.model_path / "encoder.pkl")
-            self.scaler = joblib.load(self.model_path / "scaler.pkl")
-            self.feature_names = joblib.load(self.model_path / "features.pkl")
-            self.metadata = joblib.load(self.model_path / "model_metadata.pkl")
-        except FileNotFoundError as e:
-            raise FileNotFoundError(f"Model artifacts not found in {self.model_path}: {e}")
-        
-        
     def preprocess(self, input_data: Dict[str, Any]) -> pd.DataFrame:
+        """
+        Preprocess loan application data - CORRECTED VERSION
+        
+        ONLY uses base features (no derived features):
+        - loan_amnt
+        - dti
+        - annual_inc
+        - addr_state
+        - emp_length
+        """
+        
+        # Extract ONLY base features
         loan_amnt = input_data['loan_amnt']
         dti = input_data['dti']
         annual_inc = input_data.get('annual_inc', 50000)
+        addr_state = input_data['addr_state']
+        emp_length = input_data.get('emp_length', 'Unknown')
         
-        loan_category = self._categorize_loan_amount(loan_amnt)
-        dti_risk = self._categorize_dti(dti)
-        
+        # Create features dictionary with ONLY base features
         features = {
             'loan_amnt': loan_amnt,
             'dti': dti,
             'annual_inc': annual_inc,
-            'addr_state': input_data['addr_state'],
-            #'zip_code': input_data['zip_code'],
-            'emp_length': input_data.get('emp_length', 'Unknown'),
-            'loan_category': loan_category,
-            'dti_risk': dti_risk
+            'addr_state': addr_state,
+            'emp_length': emp_length
         }
         
-        return pd.DataFrame([features])[self.feature_names]
+        # Return as DataFrame (will be one-hot encoded in base class)
+        return pd.DataFrame([features])
+    
     
     def postprocess(self, prediction: int, confidence: float, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Add business logic and enrich prediction"""
+        
         recommendation = "APPROVED" if prediction == 1 else "REJECTED"
         display_confidence = confidence if prediction == 1 else (1 - confidence)
         
@@ -58,6 +64,7 @@ class LoanPredictor(BasePredictor):
             "estimated_grade": estimated_grade,
             "estimated_rate": estimated_rate,
             "details": {
+                # Keep these for display only (not used in model)
                 "loan_category": self._categorize_loan_amount(input_data['loan_amnt']),
                 "dti_risk": self._categorize_dti(input_data['dti']),
                 "state": input_data['addr_state'],
@@ -67,6 +74,7 @@ class LoanPredictor(BasePredictor):
     
     @staticmethod
     def _categorize_loan_amount(amount: float) -> str:
+        """Categorize loan amount - FOR DISPLAY ONLY"""
         if amount <= 5000:
             return 'small'
         elif amount <= 15000:
@@ -78,6 +86,7 @@ class LoanPredictor(BasePredictor):
     
     @staticmethod
     def _categorize_dti(dti: float) -> str:
+        """Categorize DTI - FOR DISPLAY ONLY"""
         if dti <= 15:
             return 'low'
         elif dti <= 28:
@@ -89,20 +98,21 @@ class LoanPredictor(BasePredictor):
     
     @staticmethod
     def _estimate_grade(confidence: float, dti: float, loan_amnt: float) -> str:
-     """Estimate loan grade - more realistic"""
-     if confidence >= 0.85 and dti < 20:
-        return 'A'
-     elif confidence >= 0.75 and dti < 28:
-        return 'B'
-     elif confidence >= 0.60 and dti < 32:  # Changed from 0.75
-        return 'C'
-     elif confidence >= 0.50:
-        return 'D' 
-     else:
-        return 'E-F'
+        """Estimate loan grade"""
+        if confidence >= 0.85 and dti < 20:
+            return 'A'
+        elif confidence >= 0.75 and dti < 28:
+            return 'B'
+        elif confidence >= 0.60 and dti < 32:
+            return 'C'
+        elif confidence >= 0.50:
+            return 'D'
+        else:
+            return 'E-F'
     
     @staticmethod
     def _estimate_rate(grade: str) -> str:
+        """Estimate interest rate range"""
         rate_map = {
             'A': '5.3% - 8.0%',
             'B': '8.0% - 11.0%',
@@ -114,10 +124,10 @@ class LoanPredictor(BasePredictor):
     
     @staticmethod
     def _assess_risk(dti: float, loan_amnt: float, confidence: float) -> str:
-      """Assess overall risk - adjusted thresholds"""
-      if confidence >= 0.80:
-        return 'LOW'
-      elif confidence >= 0.60:  # Changed from 0.65
-        return 'MEDIUM'
-      else:
-        return 'HIGH'
+        """Assess overall risk"""
+        if confidence >= 0.80:
+            return 'LOW'
+        elif confidence >= 0.60:
+            return 'MEDIUM'
+        else:
+            return 'HIGH'
