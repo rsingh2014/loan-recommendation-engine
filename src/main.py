@@ -48,3 +48,4 @@ def root():
 if __name__ == "__main__":
     print("🚀 Starting Loan Recommendation API...")
     uvicorn.run(app, host="0.0.0.0", port=8080)
+    #uvicorn.run(app, host="0.0.0.0", port=8000)  # ← Change 8080 to 8000

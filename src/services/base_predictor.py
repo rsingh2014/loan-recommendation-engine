@@ -22,10 +22,12 @@ class BasePredictor(ABC):
     def load_artifacts(self):
         """Load model and preprocessing artifacts"""
         try:
-            self.model = joblib.load(self.model_path / "recommendation_model.pkl")
-            self.encoders = joblib.load(self.model_path / "encoders.pkl")
+            #self.model = joblib.load(self.model_path / "recommendation_model.pkl")
+            self.model = joblib.load(self.model_path / "loan_model.pkl")
+            self.encoders = joblib.load(self.model_path / "encoder.pkl")
             self.scaler = joblib.load(self.model_path / "scaler.pkl")
-            self.feature_names = joblib.load(self.model_path / "feature_names.pkl")
+            #self.feature_names = joblib.load(self.model_path / "feature_names.pkl")
+            self.feature_names = joblib.load(self.model_path / "features.pkl")
             self.metadata = joblib.load(self.model_path / "model_metadata.pkl")
             print(f"✓ Model loaded: {self.metadata['model_name']}")
         except FileNotFoundError as e:
@@ -45,13 +47,47 @@ class BasePredictor(ABC):
         """Main prediction pipeline - reusable across all engines"""
         # 1. Preprocess (engine-specific)
         processed_data = self.preprocess(input_data)
+        print("\n=== STEP 1: PREPROCESSED ===")
+        print("Shape:", processed_data.shape)
+        print("Data:\n", processed_data)
+        print("Data types:\n", processed_data.dtypes)
         
+        # DEBUG: Print what we're sending to the model
+        print("\n=== DEBUG INFO ===")
+        print("Input data:", input_data)
+        print("Processed data shape:", processed_data.shape)
+        print("Processed data columns:", processed_data.columns.tolist())
+        print("Processed data values:", processed_data.values[0])
+        print("Expected features:", self.feature_names)
+        print("==================\n")
+
         # 2. Encode categorical features
         encoded_data = self._encode_features(processed_data)
+        print("\n=== STEP 2: ENCODED ===")
+        print("Shape:", encoded_data.shape)
+        print("Data:\n", encoded_data)
+        print("Data types:\n", encoded_data.dtypes)
+        print("Any NaN?", encoded_data.isna().any())
         
         # 3. Scale features
-        scaled_data = self.scaler.transform(encoded_data)
+        try:
+           scaled_array = self.scaler.transform(encoded_data)
+           print("\n=== STEP 3: SCALED (array) ===")
+           print("Shape:", scaled_array.shape)
+           print("Data:", scaled_array)
         
+           scaled_data = pd.DataFrame(
+            scaled_array,
+            columns=encoded_data.columns
+          )
+           print("\n=== STEP 3: SCALED (DataFrame) ===")
+           print("Shape:", scaled_data.shape)
+           print("Data:\n", scaled_data)
+        
+        except Exception as e:
+         print(f"\n!!! SCALING ERROR: {e}")
+         raise
+
         # 4. Make prediction
         prediction = self.model.predict(scaled_data)[0]
         probabilities = self.model.predict_proba(scaled_data)[0]
@@ -63,36 +99,31 @@ class BasePredictor(ABC):
         return result
     
     def _encode_features(self, df: pd.DataFrame) -> pd.DataFrame:
-      """Encode categorical features using stored encoders"""
-      encoded = df.copy()
-    
-      for col, encoder in self.encoders.items():
-        if col in encoded.columns:
-            try:
-                value = encoded[col].iloc[0]
+       """Encode categorical features using stored encoders"""
+       encoded = df.copy()
+       for col, encoder in self.encoders.items():
+           if col in encoded.columns:
+              try:
+                   # Get the value
+                   values = encoded[col].values
+
+                   # Check if values are in encoder's known classes
+                   unknown_mask = ~pd.Series(values).isin(encoder.classes_)
                 
-                # Special handling for zip_code - use mode (most common value)
-                if col == 'zip_code' and value not in encoder.classes_:
-                    # Use the most common zip code from training data
-                    encoded[col] = encoder.transform([encoder.classes_[0]])[0]
-                    print(f"Warning: Unknown zip_code '{value}', using default")
-                # For other categorical features, try 'Unknown' fallback
-                elif value not in encoder.classes_:
-                    if 'Unknown' in encoder.classes_:
-                        encoded[col] = encoder.transform(['Unknown'])[0]
-                    else:
-                        # Use the first class as default
-                        encoded[col] = encoder.transform([encoder.classes_[0]])[0]
-                        print(f"Warning: Unknown value for {col}, using default")
-                else:
-                    # Normal encoding
-                    encoded[col] = encoder.transform(encoded[col])
-                    
-            except Exception as e:
-                print(f"Error encoding {col}: {e}, using fallback")
-                encoded[col] = 0
+                   if unknown_mask.any():
+                    # Replace unknown values with the most common class
+                    print(f"Warning: Unknown values in {col}, using default")
+                    values[unknown_mask] = encoder.classes_[0]
+                
+                   # Encode
+                   encoded[col] = encoder.transform(values)
+                
+              except Exception as e:
+               print(f"Error encoding {col}: {e}, using fallback")
+               encoded[col] = 0
     
-      return encoded
+       # Ensure all columns are numeric
+       return encoded.astype(float)
     
     def batch_predict(self, input_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process multiple predictions"""

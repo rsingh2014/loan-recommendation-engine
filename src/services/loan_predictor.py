@@ -1,9 +1,25 @@
 from .base_predictor import BasePredictor
 import pandas as pd
+import joblib
+from pathlib import Path 
 from typing import Dict, Any
 
 class LoanPredictor(BasePredictor):
     
+    def __init__(self, model_path="models"):
+        self.model_path = Path(model_path)
+        
+        # Load all required artifacts
+        try:
+            self.model = joblib.load(self.model_path / "loan_model.pkl")
+            self.encoder = joblib.load(self.model_path / "encoder.pkl")
+            self.scaler = joblib.load(self.model_path / "scaler.pkl")
+            self.feature_names = joblib.load(self.model_path / "features.pkl")
+            self.metadata = joblib.load(self.model_path / "model_metadata.pkl")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Model artifacts not found in {self.model_path}: {e}")
+        
+        
     def preprocess(self, input_data: Dict[str, Any]) -> pd.DataFrame:
         loan_amnt = input_data['loan_amnt']
         dti = input_data['dti']
@@ -17,7 +33,7 @@ class LoanPredictor(BasePredictor):
             'dti': dti,
             'annual_inc': annual_inc,
             'addr_state': input_data['addr_state'],
-            'zip_code': input_data['zip_code'],
+            #'zip_code': input_data['zip_code'],
             'emp_length': input_data.get('emp_length', 'Unknown'),
             'loan_category': loan_category,
             'dti_risk': dti_risk
