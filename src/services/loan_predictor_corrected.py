@@ -3,7 +3,7 @@ Loan Predictor - CORRECTED for One-Hot Encoding
 Removed derived features (loan_category, dti_risk)
 """
 
-from .base_predictor import BasePredictor
+from .base_predictor_corrected import BasePredictor
 import pandas as pd
 import joblib
 from pathlib import Path
